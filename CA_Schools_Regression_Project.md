@@ -146,8 +146,8 @@ ggplot(df3, aes(x=score, y=mean, fill=grades)) +
                  position=position_dodge(.9)) 
 ```
 
+![part2](https://github.com/schachz/CaliSchools_Regression_Analysis/assets/100746204/9bc9d020-c79d-4cc4-aebe-7561693b63e8)
 
-![part2](https://github.com/schachz/CA_Schools_RegressionAnalysis/assets/100746204/dcf37b4e-e0c7-455c-8b05-09aca61757d8)
 
 
 ### Part 3.
@@ -298,9 +298,7 @@ df %>%
   geom_smooth(method=lm)+
   geom_text(data = filter(df, ave>700),aes(label=school))
 ```
-![part5](https://github.com/schachz/CA_Schools_RegressionAnalysis/assets/100746204/ef7ab10c-3e56-40e2-addc-e84bd523dd63)
-
-![](CA_Schools_Regression_Project_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![part5](https://github.com/schachz/CaliSchools_Regression_Analysis/assets/100746204/c8ca9b93-faff-42b0-8da9-ccff714f507c)
 
 ### Part 6.
 
@@ -372,9 +370,7 @@ as the Cook’s D to identify any influential points.
 ``` r
 plot(fit,which = 2)
 ```
-![part7](https://github.com/schachz/CA_Schools_RegressionAnalysis/assets/100746204/1f4865b9-3b39-4139-90de-da1fb67d7e04)
-
-![](CA_Schools_Regression_Project_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+![part7](https://github.com/schachz/CaliSchools_Regression_Analysis/assets/100746204/a24d1953-2e01-417c-b368-ba07bc871e2a)
 
 ``` r
 shapiro.test(fit[['residuals']])
@@ -395,9 +391,8 @@ n <- nrow(df)
 plot(cooksD, main = "Cooks Distance for Influential Obs")
 abline(h = 4/n, lty = 2, col = "blue")
 ```
-![part7b](https://github.com/schachz/CA_Schools_RegressionAnalysis/assets/100746204/9fea85b6-f1da-4075-a345-d54408739277)
 
-![](CA_Schools_Regression_Project_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![part7b](https://github.com/schachz/CaliSchools_Regression_Analysis/assets/100746204/413e1f7a-630e-4e0c-aa06-f3eaea811442)
 
 ``` r
 influential_obs <- as.numeric(names(cooksD)[(cooksD > (4/n))])
@@ -488,9 +483,8 @@ color-predictor mapping.
 ``` r
 plot(model, "lambda", label = TRUE)
 ```
-![part10](https://github.com/schachz/CA_Schools_RegressionAnalysis/assets/100746204/8ca38c96-9a4c-4c02-9470-8dfd0d138092)
 
-![](CA_Schools_Regression_Project_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![part10](https://github.com/schachz/CaliSchools_Regression_Analysis/assets/100746204/8aad2fca-ecb5-4e70-90e3-0d2f30746344)
 
 ### Part 11.
 
@@ -588,9 +582,8 @@ model
 ``` r
 plot(model$results$RMSE, model$results$lambda, col= ifelse(model$results$lambda == 0, "red", "black"), type = "p", xlab = "RMSE", ylab = "Lambda")
 ```
-![part11](https://github.com/schachz/CA_Schools_RegressionAnalysis/assets/100746204/186e35b3-1ec4-4cf0-b14e-30ab0f69fb03)
 
-![](CA_Schools_Regression_Project_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+![part11](https://github.com/schachz/CaliSchools_Regression_Analysis/assets/100746204/b9f0665b-be2b-4096-8d71-6f61b6f06cac)
 
 The optimal lambda is 0. With a lambda of 0 all predictors have non-zero
 coefficients.
@@ -690,9 +683,10 @@ rownames(df_std3) = schools
 clusters <- hclust(dist(df_std3), method = "ward.D2")
 plot(clusters)
 ```
-![part14](https://github.com/schachz/CA_Schools_RegressionAnalysis/assets/100746204/ce197317-8f87-408e-8bd2-ea26945d246b)
 
 
+
+![part14](https://github.com/schachz/CaliSchools_Regression_Analysis/assets/100746204/801658f7-f16a-49b7-bd6f-c64a5498f023)
 
 ### Part 15.
 

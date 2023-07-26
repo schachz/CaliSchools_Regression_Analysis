@@ -1,0 +1,419 @@
+---
+title: "CA_Schools_RegressionAnalysis"
+author: 'Zach Schachter'
+output: github_document
+
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(car)
+library(MASS)
+library(glmnet)
+library(caret)
+library(remotes)
+remotes::install_github("pbreheny/hdrm")
+library(hdrm)
+library(nlme)
+library(cluster)
+library(factoextra)
+library(knitr)
+
+
+
+```
+
+
+
+
+## Data description. 
+
+The data used here are from all 420 K-6 and K-8 districts in California with data available for 1998 and 1999. Test scores are on the Stanford 9 standardized test administered to 5th grade students. School characteristics (averaged across the district) include enrollment, number of teachers (measured as “full-time equivalents”, number of computers per classroom, and expenditures per student. Demographic variables for the students are averaged across the district. The demographic variables include the percentage of students in the public assistance program CalWorks (formerly AFDC), the percentage of students that qualify for a reduced price lunch, and the percentage of students that are English learners (that is, students for whom English is a second language).
+
+Reference: Stock, J. H. and Watson, M. W. (2007). *Introduction to Econometrics*, 2nd ed. Boston: Addison Wesley.
+
+
+#### Dataset
+
+Data file is available at
+https://github.com/schachz/CA_Schools_RegressionAnalysis/blob/main/CASchools.csv
+
+
+#### Dataset characteristics:
+
+- district: character. District code.
+- school: character. School name.
+- county: factor indicating county.
+- grades: factor indicating grade span of district.
+- students: Total enrollment.
+- teachers: Number of teachers.
+- calworks: Percent qualifying for CalWorks (income assistance).
+- lunch: Percent qualifying for reduced-price lunch.
+- computer: Number of computers.
+- expenditure: Expenditure per student.
+- income: District average income (in USD 1,000).
+- english: Percent of English learners.
+- read: Average reading score.
+- math: Average math score.
+
+
+## Analysis
+
+```{r}
+df <- read.csv("CASchools.csv")
+
+```
+
+
+### Part 1. 
+I will prepare a score table by grades (KK-06/KK-08) using R and the knitr package's kable function. Additionally, I will conduct appropriate statistical tests to obtain p-values for each variable (except schools N) when comparing the KK-06 group and the KK-08 group.
+
+
+
+```{r}
+summary <- df %>%
+  group_by(grades) %>%
+  summarise(N = n(),
+            mean_math = mean(math, na.rm=TRUE),
+            sd_math = sd(math, na.rm=TRUE),
+            mean_read = mean(read, na.rm=TRUE),
+            sd_read = sd(read, na.rm=TRUE)
+            )
+
+math_grade <- t.test(math ~ grades, data = df)
+math_grade_pvalue <-  math_grade$p.value
+
+read_grade <- t.test(read ~ grades, data = df)
+read_grade_pvalue <-  read_grade$p.value
+
+
+summary_table <- cbind.data.frame(Type = c("N", "math", "read"), "KK-06"= c(summary$N[1], paste0(round(summary$mean_math[1],2), "\u00b1", round(summary$sd_math[1],2)), paste0(round(summary$mean_read[1],2), "\u00b1", round(summary$sd_read[1],2))),"KK-08"= c(summary$N[2], paste0(round(summary$mean_math[2],2), "\u00b1", round(summary$sd_math[2],2)), paste0(round(summary$mean_read[2],2), "\u00b1", round(summary$sd_read[2],2))), pvalue=c(NA, round(math_grade_pvalue,4), round(read_grade_pvalue,4)))
+
+kable(summary_table)
+```
+
+
+### Part 2.
+I will create a barplot to visualize the mean math score and mean read score for grades KK-06 and KK-08. I will use different colors to distinguish between the two grades and include standard deviation bars on the plot.
+
+```{r}
+
+
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+ return(data_sum)
+}
+
+df2 <- df
+
+
+math <- data_summary(df2, varname=c("math"), 
+                    groupnames=c("grades"))
+
+
+read <- data_summary(df2, varname=c("read"), 
+                    groupnames=c("grades"))
+
+
+df3 <- rbind.data.frame(math, read)
+df3$score = (c(rep("math",2),rep("read",2)))
+df3$score = as.factor(df3$score)
+
+ggplot(df3, aes(x=score, y=mean, fill=grades)) + 
+  geom_bar(stat="identity", color="black", 
+           position=position_dodge()) +
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2,
+                 position=position_dodge(.9)) 
+
+
+```
+
+
+### Part 3.
+Next, I will calculate a new score variable by averaging math and read scores (ave = (math + read) / 2). Then, I will fit a multivariable linear regression model with this average score as the outcome variable and use grades, students, teachers, calworks, lunch, computer, expenditure, income, and english as predictors. During this process, I will check for collinearity issues and identify highly correlated predictors.
+
+
+```{r}
+df$ave = (df$math +df$read)/2
+fit <- lm(ave~grades + students + teachers + calworks + lunch + computer + expenditure + income + english,
+          data = df)
+summary(fit)
+
+```
+
+We can use the variance inflation factor (VIF) to check for multicollinearity. A VIF value greater than 10 indicates potentially correlation between a given predictor variable and other predictor variables in the model.
+
+```{r}
+vif(fit)
+
+```
+
+
+We see that the VIF for both students and teachers are greater than 10, which could be an issue.
+
+```{r}
+cor(df[ , c("students", "teachers", "calworks",  "lunch",  "computer",  "expenditure", "income", "english")])
+
+```
+
+From the correlation matrix we can see that number of students is strongly correlated with number of teachers as well as the number of computers. Additionally, the number of teachers is strongly correlated with the number of students and number of computers. This explains why students and teachers have high VIF values.
+
+
+
+
+
+### Part 4. 
+I will create a new variable representing student-teacher ratio (stratio = students/teachers). Afterward, I will perform univariate linear regression models for each predictor mentioned prior, using average score as the dependent variable. Once I obtain p-values, I will control for multiple testing using the Benjamini-Hochberg correction and identify predictors with a false discovery rate below 5%.
+
+```{r}
+
+df$stratio =  df$students / df$teachers
+df$grades = as.factor(df$grades)
+grades_pvalue <- summary(lm(ave ~ grades, data = df))$coefficients[2,4]
+stratio_pvalue <- summary(lm(ave ~ stratio, data = df))$coefficients[2,4]
+calworks_pvalue <- summary(lm(ave ~ calworks, data = df))$coefficients[2,4]
+lunch_pvalue <- summary(lm(ave ~ lunch, data = df))$coefficients[2,4]
+computer_pvalue <- summary(lm(ave ~ computer, data = df))$coefficients[2,4]
+expenditure_pvalue <- summary(lm(ave ~ expenditure, data = df))$coefficients[2,4]
+income_pvalue <- summary(lm(ave ~ income, data = df))$coefficients[2,4]
+english_pvalue <- summary(lm(ave ~ english, data = df))$coefficients[2,4]
+
+pvalues =  c(grades_pvalue,stratio_pvalue,calworks_pvalue,lunch_pvalue,computer_pvalue,expenditure_pvalue,income_pvalue,english_pvalue)
+
+res <- cbind.data.frame(Variable = c("grades","stratio", "calworks", "lunch", "computer", "expenditure", "income", "english"),
+                        p.value = pvalues, p.adjust = p.adjust(pvalues, method = "BH")) 
+
+res
+
+
+
+
+```
+
+The above variables all have a false discovery rate of less than 5%.
+
+
+
+
+### Part 5.
+To visualize the relationship between the most significant continuous predictor, which is lunch (based on p-value) and the average score, I will plot a scatter plot. Additionally, I will fit a straight line to show the trend of the scatter plot. I will also label the school names of the schools with an average score greater than 700 in the figure.
+
+```{r}
+df %>%
+  ggplot(aes(x=lunch,y=ave)) +
+  geom_point(alpha=0.5) +
+  labs(x= "Lunch", y="Average Score")+
+  geom_smooth(method=lm)+
+  geom_text(data = filter(df, ave>700),aes(label=school))
+
+
+```
+
+### Part 6.
+For this step, I will fit a multivariable linear regression model, using the outcome variable (i.e., average score) in part 4 as the dependent variable and all 8 predictors in part 4 as the independent variables. I will then print the coefficient table of the full model. I will identify the three predictors (excluding the intercept) with the smallest p-values.
+
+
+```{r}
+fit <- lm(ave ~ grades+stratio+calworks+lunch+computer+expenditure+income+english, data = df)
+summary <- summary(fit)
+summary
+
+summary$coefficients[order(summary$coefficients[,4]),]
+
+```
+
+Lunch, income and english are the three predictors with the smallest p-values.
+
+
+### Part 7.
+
+I will plot the QQ plot of model residuals for the model in part 6. During this process, I will formally test if the Gaussian assumption for the residuals is violated. Additionally, I will use the criteria of 4/n as the Cook's D to identify any influential points.
+
+```{r}
+plot(fit,which = 2)
+shapiro.test(fit[['residuals']])
+```
+Since our p-value of 0.00904 is less than .05, the Gaussian assumption of the residuals is violated.
+
+
+
+```{r}
+cooksD <- cooks.distance(fit)
+n <- nrow(df)
+plot(cooksD, main = "Cooks Distance for Influential Obs")
+abline(h = 4/n, lty = 2, col = "blue")
+
+
+influential_obs <- as.numeric(names(cooksD)[(cooksD > (4/n))])
+influential_obs
+
+length(influential_obs)
+
+
+
+```
+
+Using 4/n as the Cook’s Distance criteria, we can identify 19 points as influential points.
+
+
+### Part 8.
+Now, I will perform backward model selection by BIC, based on the full model in part 6. I will then print the coefficient table of the final model (selected model). Finally, I will calculate the predicted value (i.e., predicted average score) for Woodside Elementary using the final model.
+
+
+```{r}
+require(MASS)
+backward_fit <- stepAIC(fit, direction = "backward",trace = FALSE, k = log(n))
+backward_fit$coefficients
+
+
+#Predicted Average Score for Woodside Elementary
+predict(backward_fit, df[df$school == "Woodside Elementary",c("grades", "lunch", "income", "english")])
+```
+
+
+
+### Part 9.
+I will perform lasso regression using the same standardized dataset from part 6. Before proceeding with lasso regression, I will standardize each variable (both the outcome variable and predictors) to have a mean of 0 and a standard deviation of 1. For binary variables, I will transform them to 0 or 1 and then standardize. The pre-specified λ in this Lagrange form will be 50 (i.e. λ=50). I will identify the variables with non-zero coefficients with λ=50.
+
+
+
+
+
+```{r}
+require(glmnet) 
+df_new <- df %>% dplyr::select("ave","grades", "stratio", "calworks", "lunch", "computer", "expenditure", "income", "english")
+df_new$grades <- as.numeric(dplyr::recode(df_new$grades, "KK-06" = "0", "KK-08" = "1"))
+
+df_std <- as.data.frame(scale(df_new))
+x = df_std[,-1]
+y = df_std[,1]
+model <- glmnet(x,y, alpha = 1, standardize = FALSE)
+coef(model, s=max(model$lambda))
+
+
+```
+None have a lambda of 50.
+
+
+
+### Part 10.
+Using the standardized dataset from part 9, I will visualize the lasso regression solution path. I will pre-specify the range of λ to be (0,10,20,...,500). The x-axis will represent different values for λ, while the y-axis will represent the coefficient values. I will use different colors to indicate different predictors and include a legend for color-predictor mapping.
+
+```{r}
+plot(model, "lambda", label = TRUE)
+```
+
+
+### Part 11.
+I will perform leave-one-out cross-validation using the standardized dataset from part 9 to select the best tuning parameter λ using all samples. The range of λ will be (0,1,2,...,50). To make the decision, I will use mean squared error (MSE) as the criterion. I will visualize the curve of MSE versus λ and mark the λ with the minimum MSE using a different color on the curve. The optimum λ will be the one with the minimum MSE. Under this λ, I will determine the number of predictors with non-zero coefficients in a model with all subjects.
+
+
+```{r}
+require(caret)
+
+model <- train(
+  x,
+  y,
+  data = df_std,
+  method = 'glmnet',
+  standardize = FALSE,
+  trControl = trainControl(method = "LOOCV"),
+  tuneGrid = expand.grid(alpha = 1,  lambda = seq(0,50,1))
+)
+model
+
+plot(model$results$RMSE, model$results$lambda, col= ifelse(model$results$lambda == 0, "red", "black"), type = "p", xlab = "RMSE", ylab = "Lambda")
+```
+The optimal lambda is 0. With a lambda of 0 all predictors have non-zero coefficients.
+
+
+### Part 12.
+With the lambda set to 0, I will calculate the bootstrapping variance and the 95% confidence interval for the lunch variable. I will use at least B=1,000 bootstrapping resampling.
+
+```{r}
+coef(model$finalModel, 0)
+
+
+require(hdrm)
+bootstrap <- boot.glmnet(as.matrix(x), y, B = 1000, seed = 123, bar = FALSE)
+bootstrap[4,]
+
+var(x$lunch)
+```
+
+
+### Part 13.
+In this step, I will fit a linear mixed-effects model to incorporate the correlation structure among schools within the same county. I will use the outcome variable and the 8 predictors from part 6. I will then obtain the p-values for the three most significant predictors identified in part 6 using this new model. Finally, I will compare these p-values with the ones from the regular multivariable linear regression model in part 6 to determine which model yields more significant p-values for these three predictors.
+
+```{r}
+fit_lme <- lme(ave ~ grades+stratio+calworks+lunch+computer+expenditure+income+english, random=~1|county, data = df)
+anova1 <- anova(fit_lme)
+
+anova1[5,]
+
+
+anova1[8,]
+
+anova1[9,]
+
+```
+For the lunch variable, the linear mixed effects model yielded a more significant p value. However for income and english, the multivariable linear regression model yielded more significant p-values.
+
+
+
+
+### Part 14.
+To examine the similarities (clusters) among schools in the Los Angeles county, I will create a subset data containing only the 27 schools in that county. I will include only the 8 predictors specified in part 4. I will then perform hierarchical clustering based on this subset data using the ward.D2 method and I will plot the hierarchical tree structure.
+
+
+```{r, fig.height = 9, fig.width = 9, fig.align = "center"}
+df_std2 <- cbind.data.frame(school = df$school, county = df$county,  df_std)
+
+schools = df_std2[df_std2$county == "Los Angeles","school"]
+df_std3 <- df_std2[df_std2$county == "Los Angeles", c("grades","stratio", "calworks", "lunch", "computer", "expenditure", "income", "english")]
+rownames(df_std3) = schools
+
+clusters <- hclust(dist(df_std3), method = "ward.D2")
+plot(clusters)
+
+
+```
+
+### Part 15.
+I will use the gap statistics method with at least B=1,000 Monte Carlo ("bootstrap") samples to determine the best number of clusters K. The candidate range of K will be 1-5. I will estimate the number of clusters and calculate the mean average score (original score, unstandardized version) for each cluster.
+
+```{r}
+# computing gap statistic
+set.seed(123)
+gap_stat <- clusGap(df_std3, FUN = kmeans, nstart = 25,
+                    K.max = 5, B = 1000)
+
+#Result
+print(gap_stat, method = "firstmax")
+
+
+fviz_gap_stat(gap_stat)
+
+# Average scores (original score, unstandardized version):
+
+kmeans <-kmeans(df_std3, 5)
+kmeans$centers
+
+
+
+```
+
+
+The optimal number of clusters is 5.
